@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services\Logger;
+namespace Craftix\Enums;
 
 /** Log levels recognised by the CLI logger */
 enum LogLevel: string

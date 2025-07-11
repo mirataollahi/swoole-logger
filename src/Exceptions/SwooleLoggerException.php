@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services\Exceptions;
+namespace Craftix\Exceptions;
 
 use Exception;
 

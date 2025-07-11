@@ -1,6 +1,8 @@
 <?php
 
-namespace App\Services\Logger;
+namespace Craftix\Logger;
+
+use Craftix\Enums\LogLevel;
 
 /**
  * Immutable value‑object representing a single log entry queued in the channel.

@@ -1,8 +1,8 @@
 <?php
 
-namespace App\Services\Printers\Base;
+namespace Craftix\Printers\Base;
 
-use App\Services\Logger\BufferedLog;
+use Craftix\Logger\BufferedLog;
 
 /** Log printer driver class */
 abstract class LogPrinter

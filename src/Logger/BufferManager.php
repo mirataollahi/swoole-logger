@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services\Logger;
+namespace Craftix\Logger;
 
 use Swoole\Coroutine;
 use Swoole\Coroutine\Channel;
@@ -19,7 +19,7 @@ class BufferManager
     protected float $pushTimeout = 0.001;
 
     /** Read or pop from logs buffer timeout */
-    protected float $bufferQueuePopTimeout = 1;
+    protected float $bufferQueuePopTimeout = 10;
 
     /** Channel holding encoded log lines waiting to be flushed. */
     public readonly Channel $buffer;
@@ -44,17 +44,6 @@ class BufferManager
     /** Background coroutine to drain the buffer and print to STDOUT */
     public function initBufferReaderTimer(): void
     {
-        $this->bufferReaderTimerId = Coroutine::create(function (): void {
-            while (true) {
-                $msg = $this->buffer->pop($this->bufferQueuePopTimeout);
-                if ($msg === false) {
-                    break;
-                }
-                fwrite(STDOUT, $msg);
-            }
-        });
-
-
         $this->bufferReaderTimerId = Coroutine::create(function () {
             while (!$this->isClosing) {
                 $logStream = $this->buffer->pop($this->bufferQueuePopTimeout);
@@ -64,18 +53,19 @@ class BufferManager
                     $this->error("Console logger buffer channel closed unexpectedly");
                     break;
                 }
-                if ($logStream) {
+                else if ($logStream instanceof BufferedLog) {
                     $this->onBufferLogReceive($logStream);
+                } else {
+                   ## Do nothing in channel timeout
                 }
-
             }
         });
     }
 
     /** Print log stream with log printer driver */
-    public function onBufferLogReceive(string $log): void
+    public function onBufferLogReceive(BufferedLog $bufferedLog): void
     {
-        echo  $log;
+        Logger::onLogReceived($bufferedLog);
     }
 
     /** Create an instance of console logs buffer manager */
@@ -85,9 +75,9 @@ class BufferManager
     }
 
     /** Enqueue a pre‑formatted log line. Line is encoded log line including newline */
-    public function push(string $line): void
+    public function push(BufferedLog $bufferedLog): bool
     {
-        $this->buffer->push($line, $this->pushTimeout);
+        return $this->buffer->push($bufferedLog, $this->pushTimeout);
     }
 
     /** Internal error happen  */

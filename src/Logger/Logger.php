@@ -1,8 +1,10 @@
 <?php
 
-namespace App\Services\Logger;
+namespace Craftix\Logger;
 
-use App\Services\Printers\Console\ConsoleLogPrinter;
+use Craftix\Enums\LogLevel;
+use Craftix\Printers\Base\LogPrinter;
+use Craftix\Printers\Console\ConsoleLogPrinter;
 
 /** Simple, high‑performance logger without I/O block */
 class Logger
@@ -22,6 +24,9 @@ class Logger
     /** Logs queue buffer manager to prevent I/O log operation */
     public static BufferManager $bufferManager;
 
+    public bool $enableBuffer = false;
+
+    /** @var LogPrinter[]  */
     public static array $printers = [];
 
     /** Create new instance of logger service */
@@ -32,8 +37,15 @@ class Logger
         $this->intPrinters();
     }
 
+    public function enableLogBuffer(): static
+    {
+        $this->enableBuffer = true;
+        $this->initBufferManager();
+        return $this;
+    }
+
     /** Init logs buffer queue and its consumer */
-    public function intBufferManager(): void
+    public function initBufferManager(): void
     {
         if (!isset(self::$bufferManager)) {
             self::$bufferManager = BufferManager::make();
@@ -47,12 +59,10 @@ class Logger
     }
 
     /** Print with printers */
-    public static function print(): void
+    public static function onLogReceived(BufferedLog $bufferedLog): void
     {
         foreach (self::$printers as $printer) {
-            if (method_exists($printer, 'print')) {
-                $printer->print();
-            }
+            $printer->print($bufferedLog);
         }
     }
 
@@ -76,68 +86,50 @@ class Logger
     public function success(string $message, array $tags = []): void
     {
         $bufferedLog = $this->createBufferLog(LogLevel::SUCCESS, $message, $tags);
-        $this->echo($output);
+        $this->pushInBuffer($bufferedLog);
     }
 
     /** Log an info message with optional tags */
     public function info(string $message, array $tags = []): void
     {
         $bufferedLog = $this->createBufferLog(LogLevel::INFO, $message, $tags);
-        $this->echo($output);
+        $this->pushInBuffer($bufferedLog);
     }
 
     /** Log a success message with optional tags */
     public function warning(string $message, array $tags = []): void
     {
         $bufferedLog = $this->createBufferLog(LogLevel::WARNING, $message, $tags);
-        $this->echo($output);
+        $this->pushInBuffer($bufferedLog);
     }
 
     /** Log a error message in php running console */
     public function error(string $message, array $tags = []): void
     {
         $bufferedLog = $this->createBufferLog(LogLevel::ERROR, $message, $tags);
-        $this->echo($output);
+        $this->pushInBuffer($bufferedLog);
+    }
+
+    public function pushInBuffer(BufferedLog $bufferedLog): bool
+    {
+        ## Buffer is disable
+        if (!$this->enableBuffer) {
+            self::onLogReceived($bufferedLog);
+            return true;
+        }
+
+        ## Push to buffer
+        return self::$bufferManager->push($bufferedLog);
     }
 
     /** Generate log message output format stream text */
-    private function createBufferLog(LogLevel $level, string $message, array $tags = []): string
+    private function createBufferLog(LogLevel $level, string $message, array $tags = []): BufferedLog
     {
-        $bufferedLog = BufferedLog::create()
+        return BufferedLog::create()
             ->setMessage($message)
             ->setLogLevel($level)
             ->setTags($tags)
             ->setServiceName($this->serviceName);
-    }
-
-    /** Echo message in terminal console  */
-    public function echo(?string $outputStream): void
-    {
-        echo $outputStream . PHP_EOL;
-    }
-
-    /** Format log tags in printable stream */
-    private function formatTags(array $tags): string
-    {
-        if (!$tags) {
-            return '';
-        }
-        $parts = [];
-        foreach ($tags as $k => $v) {
-            $parts[] = is_string($k)
-                ? "{$k}=" . $this->stringify($v)
-                : $this->stringify($v);
-        }
-        return ' {' . implode(', ', $parts) . '}';
-    }
-
-    /** Convert non stringify variable to string */
-    private function stringify(mixed $value): string
-    {
-        return match (true) {
-            is_scalar($value), $value === null => (string)$value,
-            default => json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-        };
     }
 
     /** Static log a message in console stdout */

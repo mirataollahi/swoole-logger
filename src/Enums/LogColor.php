@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services\Logger;
+namespace Craftix\Enums;
 
 /** Terminal colours (bright variants) */
 enum LogColor: string
