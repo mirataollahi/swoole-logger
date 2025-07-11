@@ -4,8 +4,6 @@ namespace Craftix\Logger;
 
 use Swoole\Coroutine;
 use Swoole\Coroutine\Channel;
-use Throwable;
-use const STDOUT;
 
 class BufferManager
 {
@@ -33,6 +31,9 @@ class BufferManager
     /** Console buffer instance is in closing status */
     protected  bool $isClosing = false;
 
+    /** Buffer current logs items count */
+    private int $bufferItemsCount = 0;
+
     /** Create an instance of console buffer manager . Calculate buffer capacity from memory budget */
     private function __construct()
     {
@@ -47,16 +48,14 @@ class BufferManager
         $this->bufferReaderTimerId = Coroutine::create(function () {
             while (!$this->isClosing) {
                 $logStream = $this->buffer->pop($this->bufferQueuePopTimeout);
-
                 ## Check pop timeout reached
                 if ($this->buffer->errCode === SWOOLE_CHANNEL_CLOSED) {
-                    $this->error("Console logger buffer channel closed unexpectedly");
+                    Logger::handleError('Console logger buffer channel closed unexpectedly');
                     break;
                 }
                 else if ($logStream instanceof BufferedLog) {
+                    $this->bufferItemsCount--;
                     $this->onBufferLogReceive($logStream);
-                } else {
-                   ## Do nothing in channel timeout
                 }
             }
         });
@@ -77,33 +76,26 @@ class BufferManager
     /** Enqueue a pre‑formatted log line. Line is encoded log line including newline */
     public function push(BufferedLog $bufferedLog): bool
     {
+        $this->bufferItemsCount++;
         return $this->buffer->push($bufferedLog, $this->pushTimeout);
     }
 
-    /** Internal error happen  */
-    public function error(string $message): void
+    /** Close log buffer manager service */
+    public function close(): void
     {
-        error_log($message.PHP_EOL);
+        if ($this->isClosing)
+            return;
+
+        $this->isClosing = true;
+        while (!$this->buffer->isEmpty() && $this->bufferItemsCount > 0) {
+            Logger::handleError("Logger buffer closed with buffered logs count $this->bufferItemsCount");
+        }
+        $this->buffer->close();
     }
 
     /** Destruct console logs buffer manager instance and its resources */
     public function __destruct()
     {
-        try {
-            while (!$this->buffer->isEmpty()) {
-                $line = $this->buffer->pop(0.001);
-                if ($line === false) {
-                    break;
-                }
-                fwrite(STDOUT, $line);
-            }
-            $this->buffer->close();
-        } catch (Throwable $exception) {
-            $class = static::class;
-            $message = $exception->getMessage();
-            $exceptionClass = get_class($exception);
-            $trace = $exception->getTraceAsString();
-            error_log("[{$class}::__destruct] Caught exception ({$exceptionClass}): {$message}\nStack trace:\n{$trace}");
-        }
+        $this->close();
     }
 }

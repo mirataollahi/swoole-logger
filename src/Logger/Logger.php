@@ -5,6 +5,7 @@ namespace Craftix\Logger;
 use Craftix\Enums\LogLevel;
 use Craftix\Printers\Base\LogPrinter;
 use Craftix\Printers\Console\ConsoleLogPrinter;
+use Throwable;
 
 /** Simple, high‑performance logger without I/O block */
 class Logger
@@ -12,35 +13,49 @@ class Logger
     /** The logger instance belongs to the service name */
     protected ?string $serviceName;
 
-    /** Show logs in different color base log level */
-    protected bool $enableColor = true;
-
-    /** Enable print log message with its date  */
-    protected bool $enableLogDateTime = true;
-
     /** Static logger service instance using in static log method call */
     public static self $staticLogger;
 
     /** Logs queue buffer manager to prevent I/O log operation */
     public static BufferManager $bufferManager;
 
-    public bool $enableBuffer = false;
+    private bool $enableBuffer = false;
 
     /** @var LogPrinter[]  */
     public static array $printers = [];
 
+    /** Logger service is closing   */
+    public bool $isClosing = false;
+
+    /** Error handle callback function */
+    private static mixed $onErrorCallback = null;
+
     /** Create new instance of logger service */
-    public function __construct(?string $serviceName = null, array $config = [])
+    public function __construct(?string $serviceName = null)
     {
         $this->serviceName = $serviceName;
-        $this->setConfigs($config);
         $this->intPrinters();
     }
 
+    /** Enable log buffer only in swoole coroutine context mode */
     public function enableLogBuffer(): static
     {
         $this->enableBuffer = true;
         $this->initBufferManager();
+        return $this;
+    }
+
+    /** Disable log buffer channel and its timer */
+    public function disableLogBuffer(): static
+    {
+        $this->enableBuffer = false;
+        return $this;
+    }
+
+    /** Set on error callback function */
+    public function onError(callable $onError): static
+    {
+        static::$onErrorCallback = $onError;
         return $this;
     }
 
@@ -70,16 +85,6 @@ class Logger
     public static function make(?string $name = null, array $config = []): static
     {
         return new static($name, $config);
-    }
-
-    /** Set logger instance configs */
-    public function setConfigs(array $configs = []): void
-    {
-        foreach ($configs as $configName => $configValue) {
-            if (property_exists($this, $configName)) {
-                $this->$configName = $configValue;
-            }
-        }
     }
 
     /** Log a successful message with optional tags */
@@ -144,5 +149,27 @@ class Logger
             LogLevel::ERROR => self::$staticLogger->error($message),
             default => self::$staticLogger->info($message)
         };
+    }
+
+    /** Handle logger service errors */
+    public static function handleError(string $message): void
+    {
+        !is_null(static::$onErrorCallback)
+            ? call_user_func(static::$onErrorCallback, $message)
+            : error_log($message);
+    }
+
+    /** Close logger service and ite resources */
+    public function close(): void
+    {
+        if($this->isClosing)
+            return;
+
+        $this->isClosing = true;
+        try {
+            static::$bufferManager->close();
+        } catch (Throwable $exception) {
+            static::handleError("Close logger service error : {$exception->getMessage()}");
+        }
     }
 }

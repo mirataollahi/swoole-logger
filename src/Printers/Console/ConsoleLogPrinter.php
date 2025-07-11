@@ -16,6 +16,9 @@ class ConsoleLogPrinter extends LogPrinter
     /**enable color in cli mode */
     public bool $enableColors;
 
+    /** Enable print log message with its date  */
+    protected bool $enableLogDateTime = true;
+
     public function __construct(bool $enableColors = true)
     {
         $this->enableColors = $enableColors;
