@@ -83,31 +83,31 @@ class Logger
     }
 
     /** Log a successful message with optional tags */
-    public function success(string $message, array $tags = []): void
+    public function success(string $message, array $tags = []): bool
     {
         $bufferedLog = $this->createBufferLog(LogLevel::SUCCESS, $message, $tags);
-        $this->pushInBuffer($bufferedLog);
+        return $this->pushInBuffer($bufferedLog);
     }
 
     /** Log an info message with optional tags */
-    public function info(string $message, array $tags = []): void
+    public function info(string $message, array $tags = []): bool
     {
         $bufferedLog = $this->createBufferLog(LogLevel::INFO, $message, $tags);
-        $this->pushInBuffer($bufferedLog);
+        return $this->pushInBuffer($bufferedLog);
     }
 
     /** Log a success message with optional tags */
-    public function warning(string $message, array $tags = []): void
+    public function warning(string $message, array $tags = []): bool
     {
         $bufferedLog = $this->createBufferLog(LogLevel::WARNING, $message, $tags);
-        $this->pushInBuffer($bufferedLog);
+        return $this->pushInBuffer($bufferedLog);
     }
 
     /** Log a error message in php running console */
-    public function error(string $message, array $tags = []): void
+    public function error(string $message, array $tags = []): bool
     {
         $bufferedLog = $this->createBufferLog(LogLevel::ERROR, $message, $tags);
-        $this->pushInBuffer($bufferedLog);
+        return $this->pushInBuffer($bufferedLog);
     }
 
     public function pushInBuffer(BufferedLog $bufferedLog): bool
